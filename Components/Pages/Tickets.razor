@@ -79,7 +79,7 @@
         }
     </section>
 
-    <section class="panel">
+   <section class="panel">
         @if (mostrandoFormulario)
         {
             <h2>@(editandoId is null ? "Nuevo ticket" : $"Editar ticket #{editandoId}")</h2>
@@ -87,10 +87,11 @@
                 <label>Título
                     <input type="text" maxlength="100" @bind="fTitulo" @bind:event="oninput" />
                 </label>
-                <label>Descripción
-                    <textarea rows="4" @bind="fDescripcion" @bind:event="oninput"></textarea>
-                </label>
-                <label>Categoría
+               <label>Descripción
+            <textarea rows="4" @bind="fDescripcion" @bind:event="oninput"></textarea>
+            <small>@fDescripcion.Length / @Ticket.LongitudMaximaDescripcion caracteres</small>
+        </label>
+        <label>Categoría
                     <select @bind="fCategoriaId">
                         <option value="0">Seleccione...</option>
                         @foreach (var c in categorias)
