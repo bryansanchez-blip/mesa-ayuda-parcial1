@@ -1,0 +1,317 @@
+@page "/"
+@using MesaDeAyuda.Models
+@using MesaDeAyuda.Services
+@inject TicketService Servicio
+
+<PageTitle>Mesa de ayuda</PageTitle>
+
+<h1>Mesa de ayuda</h1>
+
+@if (mensaje is not null)
+{
+    <div class="alerta @ClaseMensaje" role="alert">@mensaje.Mensaje</div>
+}
+
+<div class="contadores">
+    <span>Total: <strong>@conteo.Total</strong></span>
+    <span>Abiertos: <strong>@conteo.Abiertos</strong></span>
+    <span>Cerrados: <strong>@conteo.Cerrados</strong></span>
+</div>
+
+<section class="barra">
+    <label>Estado
+        <select @bind="filtroEstado" @bind:after="CargarListadoAsync">
+            <option value="">Todos</option>
+            <option value="Abierto">Abierto</option>
+            <option value="Cerrado">Cerrado</option>
+        </select>
+    </label>
+    <label>Categoría
+        <select @bind="filtroCategoriaId" @bind:after="CargarListadoAsync">
+            <option value="0">Todas</option>
+            @foreach (var c in categorias)
+            {
+                <option value="@c.Id">@c.Nombre</option>
+            }
+        </select>
+    </label>
+    <button type="button" class="secundario" @onclick="QuitarFiltrosAsync" disabled="@(!HayFiltro)">Quitar filtros</button>
+    <button type="button" class="primario" @onclick="NuevoTicket">Nuevo ticket</button>
+</section>
+
+<div class="columnas">
+    <section class="panel">
+        <h2>Tickets</h2>
+        @if (falloListado)
+        {
+            <p class="vacio">No se pudo cargar el listado.</p>
+        }
+        else if (tickets.Count == 0)
+        {
+            if (HayFiltro)
+            {
+                <p class="vacio">No hay tickets que coincidan con el filtro.</p>
+            }
+            else
+            {
+                <p class="vacio">Aún no hay tickets registrados.</p>
+            }
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>Título</th><th>Categoría</th><th>Prioridad</th><th>Estado</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in tickets)
+                    {
+                        <tr class="@(t.Id == detalle?.Id ? "seleccionado" : "")" @onclick="() => SeleccionarAsync(t.Id)">
+                            <td>@t.Id</td>
+                            <td>@t.Titulo</td>
+                            <td>@t.CategoriaNombre</td>
+                            <td>@t.Prioridad</td>
+                            <td><span class="etiqueta @(t.EstaCerrado ? "cerrado" : "abierto")">@t.Estado</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section class="panel">
+        @if (mostrandoFormulario)
+        {
+            <h2>@(editandoId is null ? "Nuevo ticket" : $"Editar ticket #{editandoId}")</h2>
+            <div class="formulario">
+                <label>Título
+                    <input type="text" maxlength="100" @bind="fTitulo" @bind:event="oninput" />
+                </label>
+                <label>Descripción
+                    <textarea rows="4" @bind="fDescripcion" @bind:event="oninput"></textarea>
+                </label>
+                <label>Categoría
+                    <select @bind="fCategoriaId">
+                        <option value="0">Seleccione...</option>
+                        @foreach (var c in categorias)
+                        {
+                            <option value="@c.Id">@c.Nombre</option>
+                        }
+                    </select>
+                </label>
+                <label>Prioridad
+                    <select @bind="fPrioridad">
+                        <option value="">Seleccione...</option>
+                        @foreach (var p in Ticket.PrioridadesPermitidas)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </label>
+                <div class="acciones">
+                    <button type="button" class="primario" @onclick="GuardarAsync">Guardar</button>
+                    <button type="button" class="secundario" @onclick="CancelarFormulario">Cancelar</button>
+                </div>
+            </div>
+        }
+        else if (detalle is not null)
+        {
+            <h2>Ticket #@detalle.Id</h2>
+            <dl class="detalle">
+                <dt>Título</dt><dd>@detalle.Titulo</dd>
+                <dt>Descripción</dt><dd>@detalle.Descripcion</dd>
+                <dt>Categoría</dt><dd>@detalle.CategoriaNombre</dd>
+                <dt>Prioridad</dt><dd>@detalle.Prioridad</dd>
+                <dt>Estado</dt><dd>@detalle.Estado</dd>
+            </dl>
+
+            if (confirmandoEliminar)
+            {
+                <div class="confirmacion">
+                    <p>¿Eliminar el ticket #@detalle.Id? Esta acción no se puede deshacer.</p>
+                    <button type="button" class="peligro" @onclick="ConfirmarEliminarAsync">Sí, eliminar</button>
+                    <button type="button" class="secundario" @onclick="CancelarEliminar">Cancelar</button>
+                </div>
+            }
+            else
+            {
+                <div class="acciones">
+                    <button type="button" class="secundario" @onclick="EditarTicket" disabled="@detalle.EstaCerrado">Editar</button>
+                    <button type="button" class="secundario" @onclick="CerrarTicketAsync" disabled="@detalle.EstaCerrado">Cerrar ticket</button>
+                    <button type="button" class="peligro" @onclick="PedirConfirmacionEliminar">Eliminar</button>
+                </div>
+            }
+        }
+        else
+        {
+            <p class="vacio">Seleccione un ticket del listado para ver su detalle.</p>
+        }
+    </section>
+</div>
+
+@code {
+    private List<Ticket> tickets = new();
+    private List<Categoria> categorias = new();
+    private ConteoTickets conteo = new(0, 0, 0);
+    private Ticket? detalle;
+    private Resultado? mensaje;
+    private bool falloListado;
+
+    // Filtros
+    private string filtroEstado = "";
+    private int filtroCategoriaId = 0;
+
+    // Formulario (crear / editar)
+    private bool mostrandoFormulario;
+    private int? editandoId;
+    private string fTitulo = "";
+    private string fDescripcion = "";
+    private int fCategoriaId = 0;
+    private string fPrioridad = "";
+
+    private bool confirmandoEliminar;
+
+    private bool HayFiltro => filtroEstado != "" || filtroCategoriaId > 0;
+
+    private string ClaseMensaje => mensaje?.Tipo switch
+    {
+        TipoResultado.Exito => "exito",
+        TipoResultado.Invalido => "aviso",
+        _ => "error"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Servicio.ObtenerCategoriasAsync();
+        if (r.EsExito) categorias = r.Valor!;
+        else mensaje = r;
+
+        await RecargarTodoAsync();
+    }
+
+    // Vuelve a leer de la base: cantidades (siempre del conjunto completo), listado (con filtro) y detalle.
+    private async Task RecargarTodoAsync()
+    {
+        var rConteo = await Servicio.ContarAsync();
+        if (rConteo.EsExito) conteo = rConteo.Valor!;
+        else mensaje = rConteo;
+
+        await CargarListadoAsync();
+
+        if (detalle is not null)
+        {
+            var rDetalle = await Servicio.ObtenerAsync(detalle.Id);
+            detalle = rDetalle.EsExito ? rDetalle.Valor : null;
+        }
+    }
+
+    private async Task CargarListadoAsync()
+    {
+        EstadoTicket? estado = Enum.TryParse<EstadoTicket>(filtroEstado, out var e) ? e : null;
+        int? categoriaId = filtroCategoriaId > 0 ? filtroCategoriaId : null;
+
+        var r = await Servicio.ListarAsync(estado, categoriaId);
+        if (r.EsExito)
+        {
+            tickets = r.Valor!;
+            falloListado = false;
+        }
+        else
+        {
+            tickets = new List<Ticket>();
+            falloListado = true;
+            mensaje = r;
+        }
+    }
+
+    private async Task QuitarFiltrosAsync()
+    {
+        filtroEstado = "";
+        filtroCategoriaId = 0;
+        await CargarListadoAsync();
+    }
+
+    private async Task SeleccionarAsync(int id)
+    {
+        mostrandoFormulario = false;
+        confirmandoEliminar = false;
+        var r = await Servicio.ObtenerAsync(id);
+        if (r.EsExito)
+        {
+            detalle = r.Valor;
+            mensaje = null;
+        }
+        else
+        {
+            mensaje = r;
+            await RecargarTodoAsync();
+        }
+    }
+
+    private void NuevoTicket()
+    {
+        mensaje = null;
+        confirmandoEliminar = false;
+        editandoId = null;
+        fTitulo = "";
+        fDescripcion = "";
+        fCategoriaId = 0;
+        fPrioridad = "";
+        mostrandoFormulario = true;
+    }
+
+    private void EditarTicket()
+    {
+        if (detalle is null) return;
+        mensaje = null;
+        editandoId = detalle.Id;
+        fTitulo = detalle.Titulo;
+        fDescripcion = detalle.Descripcion;
+        fCategoriaId = detalle.CategoriaId;
+        fPrioridad = detalle.Prioridad;
+        mostrandoFormulario = true;
+    }
+
+    private void CancelarFormulario()
+    {
+        mostrandoFormulario = false;
+        editandoId = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        Resultado r = editandoId is null
+            ? await Servicio.CrearAsync(fTitulo, fDescripcion, fCategoriaId, fPrioridad)
+            : await Servicio.EditarAsync(editandoId.Value, fTitulo, fDescripcion, fCategoriaId, fPrioridad);
+
+        mensaje = r;
+        if (r.EsExito)
+        {
+            mostrandoFormulario = false;
+            editandoId = null;
+            await RecargarTodoAsync();
+        }
+        // Si fue rechazado o falló, el formulario queda abierto con lo escrito para corregirlo.
+    }
+
+    private async Task CerrarTicketAsync()
+    {
+        if (detalle is null) return;
+        mensaje = await Servicio.CerrarAsync(detalle.Id);
+        await RecargarTodoAsync();
+    }
+
+    private void PedirConfirmacionEliminar() => confirmandoEliminar = true;
+
+    private void CancelarEliminar() => confirmandoEliminar = false;
+
+    private async Task ConfirmarEliminarAsync()
+    {
+        if (detalle is null) return;
+        int id = detalle.Id;
+        confirmandoEliminar = false;
+        mensaje = await Servicio.EliminarAsync(id);
+        if (mensaje.EsExito) detalle = null;
+        await RecargarTodoAsync();
+    }
+}
