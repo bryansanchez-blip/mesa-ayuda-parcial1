@@ -58,3 +58,9 @@ Abrir http://localhost:5080
 - No hay autenticación de usuarios.
 - No hay paginación del listado.
 - Volver a ejecutar el script no duplica categorías ni tickets de ejemplo, pero tampoco restaura tickets que se hayan eliminado.
+> **Nota importante sobre la codificación de caracteres:**
+> El script de la base de datos debe cargarse indicando explícitamente `--default-character-set=utf8mb4` para que caracteres especiales como la `ñ` y las tildes se almacenen y muestren correctamente:
+> ```bash
+> mysql -u root -p --default-character-set=utf8mb4 < Database\mesa_ayuda.sql
+> ```
+> *(En Windows, si el comando `mysql` no está agregado al PATH del sistema, ejecútalo usando su ruta completa, por ejemplo: `"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p --default-character-set=utf8mb4 < Database\mesa_ayuda.sql`).*
