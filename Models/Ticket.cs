@@ -23,6 +23,7 @@ public record ConteoTickets(int Total, int Abiertos, int Cerrados);
 public class Ticket
 {
     public const int LongitudMaximaTitulo = 100;
+    public const int LongitudMaximaDescripcion = 500; // NUEVO
     public static readonly IReadOnlyList<string> PrioridadesPermitidas = new[] { "Baja", "Media", "Alta" };
 
     public int Id { get; private set; }
@@ -83,6 +84,8 @@ public class Ticket
             throw new ReglaDeNegocioException($"El título no puede superar {LongitudMaximaTitulo} caracteres.");
         if (string.IsNullOrWhiteSpace(descripcion))
             throw new ReglaDeNegocioException("La descripción no puede estar vacía.");
+        if (descripcion.Trim().Length > LongitudMaximaDescripcion) // NUEVO
+            throw new ReglaDeNegocioException($"La descripción no puede superar {LongitudMaximaDescripcion} caracteres."); // NUEVO
         if (categoriaId <= 0)
             throw new ReglaDeNegocioException("Seleccione una categoría.");
 
